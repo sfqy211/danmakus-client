@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 import {
   Copy,
@@ -49,8 +49,26 @@ const isAddingCustom = ref(false);
 const showProxyGuide = ref(false);
 const activeGuideType = ref<'nginx' | 'caddy' | 'worker'>('nginx');
 
-const proxyGuides = {
-  nginx: `# Nginx 反向代理配置
+/**
+ * 反代配置模板。
+ *
+ * 上游版本把 ukamnads.icu 写死在模板里，是因为它的节点都指向上游客服端。
+ * 自建部署里 target 应该是"你想代理到的那个中心"，所以改成按当前生效节点动态生成，
+ * 用户复制出去填自己的域名即可，不再需要改模板。
+ */
+const proxyTarget = computed(() => {
+  try {
+    return new URL(currentActiveOrigin.value);
+  } catch {
+    return new URL('https://api.ovodm.top');
+  }
+});
+
+const proxyGuides = computed<Record<'nginx' | 'caddy' | 'worker', string>>(() => {
+  const host = proxyTarget.value.host;
+  const upstream = proxyTarget.value.origin;
+  return {
+    nginx: `# Nginx 反向代理配置（上游: ${upstream}）
 server {
     listen 443 ssl http2;
     server_name proxy.example.com;
@@ -58,33 +76,38 @@ server {
     # SSL 证书配置省略...
 
     location / {
-        proxy_pass https://ukamnads.icu;
-        proxy_set_header Host ukamnads.icu;
+        proxy_pass ${upstream};
+        proxy_set_header Host ${host};
         proxy_ssl_server_name on;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        # WebSocket 升级（采集端上报依赖长连接）
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
     }
 }`,
-  caddy: `# Caddy 反向代理配置
+    caddy: `# Caddy 反向代理配置（上游: ${upstream}）
 proxy.example.com {
-    reverse_proxy https://ukamnads.icu {
-        header_up Host ukamnads.icu
+    reverse_proxy ${upstream} {
+        header_up Host ${host}
     }
 }`,
-  worker: `// Cloudflare Worker 反向代理配置
+    worker: `// Cloudflare Worker 反向代理配置（上游: ${upstream}）
 export default {
   async fetch(request) {
     const url = new URL(request.url);
-    url.hostname = 'ukamnads.icu';
+    url.hostname = '${host}';
     return fetch(new Request(url, request));
   }
 };`
-};
+  };
+});
 
 const copyGuideCode = async (type: 'nginx' | 'caddy' | 'worker') => {
   try {
-    await navigator.clipboard.writeText(proxyGuides[type]);
+    await navigator.clipboard.writeText(proxyGuides.value[type]);
     toast.success('配置已复制到剪贴板');
   } catch {
     toast.error('复制失败，请手动选择复制');
@@ -304,7 +327,7 @@ const getLatencyBadgeClass = (node: ApiNodeInfo): string => {
             <div class="flex items-center justify-between border-b pb-2">
               <div class="flex items-center gap-1.5 font-medium text-foreground">
                 <span>反代指南</span>
-                <span class="text-[10px] text-muted-foreground font-normal">（上游: https://ukamnads.icu）</span>
+                <span class="text-[10px] text-muted-foreground font-normal">（上游: {{ proxyTarget.origin }}）</span>
               </div>
               <!-- Tab 切换 -->
               <div class="flex items-center gap-1">
@@ -356,8 +379,9 @@ const getLatencyBadgeClass = (node: ApiNodeInfo): string => {
             </div>
 
             <ul class="list-disc pl-4 space-y-0.5 text-[10px] text-muted-foreground">
-              <li>反代目标上游必须为 <code class="font-mono text-foreground">https://ukamnads.icu</code> 或 <code class="font-mono text-foreground">https://api.ukamnads.icu</code>。</li>
-              <li>必须开启 SNI 并设置 <code class="font-mono text-foreground">Host: ukamnads.icu</code>（Nginx 中为 <code class="font-mono text-foreground">proxy_ssl_server_name on;</code>）。</li>
+              <li>反代目标上游即当前生效节点 <code class="font-mono text-foreground">{{ proxyTarget.origin }}</code>。</li>
+              <li>必须开启 SNI 并设置 <code class="font-mono text-foreground">Host: {{ proxyTarget.host }}</code>（Nginx 中为 <code class="font-mono text-foreground">proxy_ssl_server_name on;</code>）。</li>
+              <li>必须透传 WebSocket 升级头，否则采集端上报会自动断开重连。</li>
               <li>必须配置 HTTPS，客户端录入时请输入包含 <code class="font-mono text-foreground">https://</code> 的完整协议域名。</li>
             </ul>
           </div>

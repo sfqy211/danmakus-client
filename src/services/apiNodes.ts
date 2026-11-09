@@ -23,10 +23,25 @@ export interface ApiFallbackAlert {
 const STORAGE_KEY_PREFERRED = 'danmakus_preferred_api_origin';
 const STORAGE_KEY_CUSTOM = 'danmakus_custom_api_nodes';
 
+/**
+ * 内置节点标签。
+ *
+ * 节点列表本身来自 danmakus-core 的 `BACKEND_API_ORIGINS`（可被环境变量
+ * `DANMAKUS_API_ORIGINS` 覆盖）。这里不再写死任何域名 —— 上游版本把
+ * ukamnads.icu / api.danmakus.com 写在两处，改一处漏一处就会连错中心。
+ */
 const BUILTIN_LABELS: Record<string, string> = {
-  'https://ukamnads.icu': '官方主节点 (ukamnads.icu)',
-  'https://api.ukamnads.icu': '官方镜像节点 1 (api.ukamnads.icu)',
-  'https://api.danmakus.com': '官方备用节点 2 (api.danmakus.com)'
+  'https://api.ovodm.top': '自建中心 (api.ovodm.top)',
+  'http://localhost:3001': '本地开发中心 (localhost:3001)'
+};
+
+const describeBuiltin = (origin: string): string => {
+  if (BUILTIN_LABELS[origin]) return BUILTIN_LABELS[origin];
+  try {
+    return `自建中心 (${new URL(origin).host})`;
+  } catch {
+    return origin;
+  }
 };
 
 const normalizeOrigin = (raw: string): string => {
@@ -89,7 +104,7 @@ const ensureNodeRegistered = (origin: string, isBuiltin = false) => {
       origin,
       reactive({
         origin,
-        label: BUILTIN_LABELS[origin] || `自定义节点 (${new URL(origin).host})`,
+        label: isBuiltin ? describeBuiltin(origin) : `自定义节点 (${new URL(origin).host})`,
         isBuiltin,
         latencyMs: null,
         status: 'idle'

@@ -1,7 +1,11 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { DanmakuClient } from './DanmakuClient.js';
 import { createInMemoryLiveSessionOutbox } from './InMemoryLiveSessionOutbox.js';
 import { DEFAULT_CORE_CLIENT_VERSION } from '../version.js';
+import { BACKEND_API_ORIGINS, BACKEND_PRIMARY_ORIGIN, setBackendApiFallbackOrigins } from './BackendApiFallback.js';
+
+/** 默认中心的链尾节点（原来的 api.danmakus.com 语义：最后的兜底）。 */
+const LAST_ORIGIN = BACKEND_API_ORIGINS[BACKEND_API_ORIGINS.length - 1]!;
 
 const TEST_AUTH_UID = 42;
 
@@ -22,6 +26,11 @@ const remoteConfig = {
 };
 
 describe('DanmakuClient startup', () => {
+  // 有测试会临时改全局后端链，跑完必须复位，避免串味
+  afterEach(() => {
+    setBackendApiFallbackOrigins(null);
+  });
+
   test('reloads user info and recording list on every start', async () => {
     const client: any = new DanmakuClient({
       clientId: 'client-id',
@@ -153,14 +162,14 @@ describe('DanmakuClient startup', () => {
       const url = String(input);
       requests.push(`${init?.method ?? 'GET'} ${url}`);
 
-      if (url === 'https://ukamnads.icu/api/v2/account/core-config') {
+      if (url === `${BACKEND_PRIMARY_ORIGIN}/api/v2/account/core-config`) {
         return new Response(JSON.stringify({ code: 200, data: remoteConfig }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      if (url === 'https://ukamnads.icu/api/v2/account/info') {
+      if (url === `${BACKEND_PRIMARY_ORIGIN}/api/v2/account/info`) {
         return new Response(JSON.stringify({
           code: 200,
           data: {
@@ -175,21 +184,21 @@ describe('DanmakuClient startup', () => {
         });
       }
 
-      if (url === 'https://ukamnads.icu/api/v2/account/recording') {
+      if (url === `${BACKEND_PRIMARY_ORIGIN}/api/v2/account/recording`) {
         return new Response(JSON.stringify({ code: 200, data: [] }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      if (url === 'https://ukamnads.icu/api/v2/core-runtime/sync') {
+      if (url === `${BACKEND_PRIMARY_ORIGIN}/api/v2/core-runtime/sync`) {
         return new Response(JSON.stringify({ code: 200, data: {} }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      if (url === 'https://ukamnads.icu/api/v2/core-runtime/state?clientId=client-id&force=true') {
+      if (url === `${BACKEND_PRIMARY_ORIGIN}/api/v2/core-runtime/state?clientId=client-id&force=true`) {
         return new Response(JSON.stringify({ code: 200, data: null }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' }
@@ -211,30 +220,35 @@ describe('DanmakuClient startup', () => {
 
     await expect(client.start()).rejects.toThrow('未提供可用的 Bilibili Cookie');
     expect(requests).toEqual([
-      'GET https://ukamnads.icu/api/v2/account/core-config',
-      'GET https://ukamnads.icu/api/v2/account/info',
-      'GET https://ukamnads.icu/api/v2/account/recording'
+      `GET ${BACKEND_PRIMARY_ORIGIN}/api/v2/account/core-config`,
+      `GET ${BACKEND_PRIMARY_ORIGIN}/api/v2/account/info`,
+      `GET ${BACKEND_PRIMARY_ORIGIN}/api/v2/account/recording`
     ]);
   });
 
-  test('falls back through api.ukamnads.icu to api.danmakus.com when primary backend is unavailable', async () => {
+  test('falls back through the configured backend chain when primary is unavailable', async () => {
+    // 默认配置可能只有单个节点，这里显式设一条多节点链，才能验证"回退"语义
+    const primary = 'https://primary.invalid';
+    const middle = 'https://middle.invalid';
+    const last = 'https://last.invalid';
+    setBackendApiFallbackOrigins([primary, middle, last, ...BACKEND_API_ORIGINS]);
     const requests: string[] = [];
     const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       requests.push(`${init?.method ?? 'GET'} ${url}`);
 
-      if (!url.startsWith('https://api.danmakus.com/api/')) {
+      if (!url.startsWith(`${last}/api/`)) {
         return new Response('bad gateway', { status: 502 });
       }
 
-      if (url === 'https://api.danmakus.com/api/v2/account/core-config') {
+      if (url === `${last}/api/v2/account/core-config`) {
         return new Response(JSON.stringify({ code: 200, data: remoteConfig }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      if (url === 'https://api.danmakus.com/api/v2/account/info') {
+      if (url === `${last}/api/v2/account/info`) {
         return new Response(JSON.stringify({
           code: 200,
           data: {
@@ -249,21 +263,21 @@ describe('DanmakuClient startup', () => {
         });
       }
 
-      if (url === 'https://api.danmakus.com/api/v2/account/recording') {
+      if (url === `${last}/api/v2/account/recording`) {
         return new Response(JSON.stringify({ code: 200, data: [] }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      if (url === 'https://api.danmakus.com/api/v2/core-runtime/sync') {
+      if (url === `${last}/api/v2/core-runtime/sync`) {
         return new Response(JSON.stringify({ code: 200, data: {} }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' }
         });
       }
 
-      if (url === 'https://api.danmakus.com/api/v2/core-runtime/state?clientId=client-id&force=true') {
+      if (url === `${last}/api/v2/core-runtime/state?clientId=client-id&force=true`) {
         return new Response(JSON.stringify({ code: 200, data: null }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' }
@@ -285,15 +299,15 @@ describe('DanmakuClient startup', () => {
 
     await expect(client.start()).rejects.toThrow('未提供可用的 Bilibili Cookie');
     expect(requests).toEqual([
-      'GET https://ukamnads.icu/api/v2/account/core-config',
-      'GET https://api.ukamnads.icu/api/v2/account/core-config',
-      'GET https://api.danmakus.com/api/v2/account/core-config',
-      'GET https://ukamnads.icu/api/v2/account/info',
-      'GET https://api.ukamnads.icu/api/v2/account/info',
-      'GET https://api.danmakus.com/api/v2/account/info',
-      'GET https://ukamnads.icu/api/v2/account/recording',
-      'GET https://api.ukamnads.icu/api/v2/account/recording',
-      'GET https://api.danmakus.com/api/v2/account/recording'
+      `GET ${primary}/api/v2/account/core-config`,
+      `GET ${middle}/api/v2/account/core-config`,
+      `GET ${last}/api/v2/account/core-config`,
+      `GET ${primary}/api/v2/account/info`,
+      `GET ${middle}/api/v2/account/info`,
+      `GET ${last}/api/v2/account/info`,
+      `GET ${primary}/api/v2/account/recording`,
+      `GET ${middle}/api/v2/account/recording`,
+      `GET ${last}/api/v2/account/recording`
     ]);
   });
 

@@ -31,7 +31,7 @@ const activeHost = computed(() => {
   try {
     return new URL(currentActiveOrigin.value).host;
   } catch {
-    return 'ukamnads.icu';
+    return currentActiveOrigin.value;
   }
 });
 
@@ -65,32 +65,32 @@ const tokenValue = computed({
         <div class="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
           <ShieldCheck class="h-7 w-7 text-primary" />
         </div>
-        <CardTitle class="text-2xl font-bold tracking-tight">登录 Danmakus Client</CardTitle>
-        <CardDescription>连接弹幕收集核心与账号同步中心</CardDescription>
+        <CardTitle class="text-2xl font-bold tracking-tight">连接采集中心</CardTitle>
+        <CardDescription>用中心下发的采集节点 Token 接入弹幕归档</CardDescription>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
-          <label class="text-sm font-medium" for="core-token-input">账号 Token</label>
+          <label class="text-sm font-medium" for="core-token-input">采集节点 Token</label>
           <Input
             id="core-token-input"
             v-model="tokenValue"
             type="password"
-            placeholder="请输入账号 Token"
-            title="从账户页获取的身份验证令牌"
+            placeholder="粘贴中心后台创建的节点 Token"
+            title="在中心后台「采集节点」页创建后获取，只显示一次"
             class="h-11"
             @keyup.enter="emit('apply-token')"
           />
         </div>
 
-        <Button class="h-11 w-full" :disabled="loadingProfile" title="使用 Token 登录并加载配置" @click="emit('apply-token')">
+        <Button class="h-11 w-full" :disabled="loadingProfile" title="校验 Token 并加载该节点可录制的房间" @click="emit('apply-token')">
           <Loader2 v-if="loadingProfile" class="h-4 w-4 animate-spin" />
-          <span>{{ loadingProfile ? '连接中...' : '登录 / 连接' }}</span>
+          <span>{{ loadingProfile ? '连接中...' : '连接中心' }}</span>
         </Button>
 
-        <Button as-child variant="outline" class="h-11 w-full" title="前往网页账户中心登录">
-          <a href="https://danmakus.com/account" target="_blank" rel="noopener noreferrer">
+        <Button as-child variant="outline" class="h-11 w-full" title="前往中心后台创建采集节点并获取 Token">
+          <a :href="`${currentActiveOrigin}/#/admin`" target="_blank" rel="noopener noreferrer">
             <ExternalLink class="h-4 w-4" />
-            <span>前往网页登录</span>
+            <span>打开中心后台创建 Token</span>
           </a>
         </Button>
       </CardContent>

@@ -19,6 +19,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
+import { currentActiveOrigin } from '../../services/apiNodes';
 import type { RecordingInfoDto, UserInfo } from '../../types/api';
 
 const props = defineProps<{
@@ -69,9 +70,9 @@ const confirmLogout = () => {
             <CardDescription>ID: {{ userInfo?.id }}</CardDescription>
           </div>
           <Button variant="outline" size="sm" as-child>
-            <a href="https://danmakus.com/account" target="_blank" rel="noopener noreferrer" class="gap-1.5">
+            <a :href="`${currentActiveOrigin}/#/admin`" target="_blank" rel="noopener noreferrer" class="gap-1.5">
               <ExternalLink class="h-3.5 w-3.5" />
-              网站账户
+              中心后台
             </a>
           </Button>
         </div>

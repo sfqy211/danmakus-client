@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { BACKEND_PRIMARY_ORIGIN } from './BackendApiFallback.js';
 import { ConfigManager } from './ConfigManager.js';
 
 describe('ConfigManager CookieCloud overrides', () => {
@@ -124,6 +125,7 @@ describe('ConfigManager CookieCloud overrides', () => {
       allowedParentAreas: []
     } as any);
 
-    expect(manager.getConfig().runtimeUrl).toBe('https://ukamnads.icu/api/v2/core-runtime');
+    // 空 runtimeUrl 回退到默认中心（可配置，引用常量）
+    expect(manager.getConfig().runtimeUrl).toBe(`${BACKEND_PRIMARY_ORIGIN}/api/v2/core-runtime`);
   });
 });

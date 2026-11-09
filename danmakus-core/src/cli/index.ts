@@ -18,14 +18,14 @@ const DEFAULT_COOKIE_CLOUD_HOST = 'https://cookie.danmakus.com';
 
 program
   .name('danmakus')
-  .description('danmakus.com 弹幕采集客户端')
+  .description('弹幕采集客户端（对接自建 danmu_vue 中心）')
   .version(CORE_VERSION);
 
 program
-  .option('-r, --runtime-url <url>', 'Runtime服务器地址（例如 https://client.danmakus.com）')
+  .option('-r, --runtime-url <url>', `Runtime服务器地址（默认 ${DEFAULT_RUNTIME_URL}）`)
   .option('--capacity-override <number>', '上报给服务端的槽位覆盖数 (1-100)')
   .option('--client-id <id>', '固定此客户端设备标识')
-  .option('-t, --token <token>', '账号 Token（必填，用于加载远端配置）')
+  .option('-t, --token <token>', '采集节点 Token（必填，中心后台创建）')
   .option('-k, --cookie-key <key>', 'CookieCloud密钥')
   .option('-p, --cookie-password <password>', 'CookieCloud密码')
   .option('--cookie-host <host>', 'CookieCloud服务器地址')
@@ -61,7 +61,7 @@ program
       }
 
       if (!accountToken) {
-        console.error('错误: 必须提供账号 Token (--token)');
+        console.error('错误: 必须提供采集节点 Token (--token)');
         process.exit(1);
       }
 
@@ -74,7 +74,7 @@ program
         console.log(`槽位覆盖数: ${capacityOverride}`);
       }
 
-      console.log('账号配置: 自动从远端账号中心加载');
+      console.log('节点配置: 自动从中心加载');
 
       if (cookieCloudKey && cookieCloudPassword) {
         console.log(`CookieCloud: ${cookieCloudHost}`);

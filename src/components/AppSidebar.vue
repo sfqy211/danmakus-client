@@ -42,7 +42,7 @@ const activeNodeHost = computed(() => {
   try {
     return new URL(currentActiveOrigin.value).host;
   } catch {
-    return 'ukamnads.icu';
+    return currentActiveOrigin.value;
   }
 });
 

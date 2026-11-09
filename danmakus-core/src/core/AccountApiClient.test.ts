@@ -1,22 +1,26 @@
 import { describe, expect, test } from 'bun:test';
 import { AccountApiClient } from './AccountApiClient.js';
+import { BACKEND_API_ORIGINS, BACKEND_PRIMARY_ORIGIN } from './BackendApiFallback.js';
 
 describe('AccountApiClient', () => {
-  test('getCoreConfig should fallback through api.ukamnads.icu to api.danmakus.com when earlier backends fail', async () => {
+  test('getCoreConfig walks the configured backend chain when earlier backends fail', async () => {
+    // 默认中心可配置（默认自建），因此以链尾节点作为唯一可达目标
+    const lastOrigin = BACKEND_API_ORIGINS[BACKEND_API_ORIGINS.length - 1]!;
+    const runtimeUrl = `${lastOrigin}/api/v2/core-runtime`;
     const requests: string[] = [];
     const client = new AccountApiClient(
       'token',
       async (input) => {
         const url = String(input);
         requests.push(url);
-        if (!url.startsWith('https://api.danmakus.com/')) {
+        if (!url.startsWith(`${lastOrigin}/`)) {
           return new Response('bad gateway', { status: 502 });
         }
 
         return new Response(JSON.stringify({
           code: 200,
           data: {
-            runtimeUrl: 'https://api.danmakus.com/api/v2/core-runtime',
+            runtimeUrl,
             areas: {},
             streamers: [],
             desiredRecorders: 15,
@@ -32,12 +36,12 @@ describe('AccountApiClient', () => {
 
     const result = await client.getCoreConfig();
 
-    expect(requests).toEqual([
-      'https://ukamnads.icu/api/v2/account/core-config',
-      'https://api.ukamnads.icu/api/v2/account/core-config',
-      'https://api.danmakus.com/api/v2/account/core-config'
-    ]);
-    expect(result.runtimeUrl).toBe('https://api.danmakus.com/api/v2/core-runtime');
+    expect(requests).toEqual(
+      BACKEND_API_ORIGINS.map((origin) => `${origin}/api/v2/account/core-config`)
+    );
+    expect(result.runtimeUrl).toBe(runtimeUrl);
+    // 默认中心即链首
+    expect(requests[0]).toBe(`${BACKEND_PRIMARY_ORIGIN}/api/v2/account/core-config`);
   });
 
   test('getCoreClients should read from core runtime clients endpoint', async () => {
